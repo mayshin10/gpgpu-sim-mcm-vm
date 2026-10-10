@@ -39,11 +39,12 @@ bool inter_link::push(inter_flit *flit) {
 void inter_link::cycle() {
     new_addr_type current_cycle = m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle;
 
-    // accumulate bandwidth
-    m_token += m_fpc;
+    // accumulate bandwidth; unused tokens are kept for at most one cycle so that
+    // an idle link cannot burst above its bandwidth later
+    m_token = std::min(m_token + m_fpc, m_fpc + 1.0);
 
     // move from m_tx to inflight
-    while (m_token > 1 && !m_tx_queue->empty()) {
+    while (m_token >= 1 && !m_tx_queue->empty()) {
         inter_flit *get_flit = m_tx_queue->top();
         m_tx_queue->pop();
         m_token--;
