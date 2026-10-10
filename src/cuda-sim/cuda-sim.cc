@@ -4390,7 +4390,7 @@ public:
         }
 
         // jun_debug: remove it later
-        //fprintf(stderr, "Malloc %d Selected %d\n", malloc_num, most_frequent_size);
+        fprintf(stderr, "Malloc %d Selected %d\n", malloc_num, most_frequent_size);
     }
 
     void free(void* a) {
