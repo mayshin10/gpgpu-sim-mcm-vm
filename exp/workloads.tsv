@@ -1,0 +1,25 @@
+# <name><TAB><command>
+# The command runs with CWD = exp/logs/<tag>/<name>/<config>/ (where gpgpusim.config is),
+# so use absolute paths for the binary and its inputs. {exp} expands to this exp/ directory.
+# Binaries are built by ~/chiplets/benchmarks/build.sh (sizes match paper Table 2).
+STE	/home/myshin/chiplets/benchmarks/STE/stencil -i /home/myshin/chiplets/benchmarks/STE/512x512x64.bin -- 512 512 64 100
+3DC	/home/myshin/chiplets/benchmarks/3DC/3DConvolution
+LPS	/home/myshin/chiplets/benchmarks/LPS/laplace3d -nx=512 -ny=512 -nz=512 -repeat=1
+2DC	/home/myshin/chiplets/benchmarks/2DC/2DConvolution
+FDT	/home/myshin/chiplets/benchmarks/FDT/fdtd2d
+PAF	/home/myshin/chiplets/benchmarks/PAF/pathfinder 250000 2000 20
+SC	/home/myshin/chiplets/benchmarks/SC/sc_gpu 10 20 4096 131072 131072 1000 none output.txt 1
+DWT	/home/myshin/chiplets/benchmarks/DWT/dwt2d /home/myshin/chiplets/benchmarks/DWT/4096.rgb -d 4096x4096 -f -5 -l 3
+LUD	/home/myshin/chiplets/benchmarks/LUD/lud_cuda -s 32768
+# Graph / SDK workloads (paper Table 2 refs [22] [24] [75]); see benchmarks/build.sh
+BFS	/home/myshin/chiplets/benchmarks/BFS/bfs /home/myshin/chiplets/benchmarks/inputs/USA-road-d.W.bin.gr
+SSSP	/home/myshin/chiplets/benchmarks/SSSP/sssp /home/myshin/chiplets/benchmarks/inputs/USA-road-d.USA.gr 0
+BLK	/home/myshin/chiplets/benchmarks/BLK/BlackScholes
+# GEMM (CUDA samples matrixMul, block 32): C(MxN) = A(MxK) * B(KxN) -> -hA=M -wA=K -hB=K -wB=N
+VIT	/home/myshin/chiplets/benchmarks/GEMM/matrixMul -hA=8192 -wA=768 -hB=768 -wB=1024
+RES50	/home/myshin/chiplets/benchmarks/GEMM/matrixMul -hA=8192 -wA=2048 -hB=2048 -wB=1024
+# GPT3: Table 2 says N=5000, but its 2.31GB footprint matches N=50000 (GPT-3 vocab ~50K)
+GPT3	/home/myshin/chiplets/benchmarks/GEMM/matrixMul -hA=64 -wA=12288 -hB=12288 -wB=50000
+# CLAP Fig. 20: GEMM 8192x768x1024, then a second GEMM reads the top-left quarter of C* (CLAP + migration)
+# source: exp/benchmarks/GEMM_REUSE/gemm_reuse.cu (nvcc -cudart shared -arch=sm_70 -O3)
+GEMM_REUSE	/home/myshin/chiplets/benchmarks/GEMM_REUSE/gemm_reuse
