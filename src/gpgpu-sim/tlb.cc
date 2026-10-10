@@ -927,12 +927,26 @@ void tlb_tag_array::flush_TLBs(uint64_t vpn_chunk) {
     }
 };
 
+// 2MB chunk number covered by a coalesced entry
+// (64KB entry: tag = key >> (PAGE_64K_SHIFT + COALESCING_SHIFT), 2MB entry: tag = key >> PAGE_2M_SHIFT)
+static new_addr_type coal_entry_chunk(new_addr_type tag, new_addr_type shift, unsigned page_size) {
+    if (page_size == PAGE_2M) return tag;
+    return tag >> (static_cast<new_addr_type>(PAGE_2M_SHIFT) - shift - static_cast<new_addr_type>(COALESCING_SHIFT));
+}
+
 void tlb_tag_array::flush_private(uint64_t vpn_chunk) {
     for (auto iter = tag_array->begin(); iter != tag_array->end(); ){
         new_addr_type tag_shift = 9 - iter->m_shift;
         new_addr_type check_tag = iter->m_tag >> tag_shift;
         if (vpn_chunk == check_tag) {
-            tag_array->erase(iter);
+            iter = tag_array->erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+    for (auto iter = coal_tag_array->begin(); iter != coal_tag_array->end(); ){
+        if (vpn_chunk == coal_entry_chunk(iter->m_tag, iter->m_shift, iter->m_page_size)) {
+            iter = coal_tag_array->erase(iter);
         } else {
             ++iter;
         }
@@ -948,9 +962,17 @@ void tlb_tag_array::flush_shared(uint64_t vpn_chunk) {
             new_addr_type tag_shift = 9 - iter->m_shift;
             new_addr_type check_tag = iter->m_tag >> tag_shift;
             if (vpn_chunk == check_tag) {
-                probe_array->erase(iter);
+                iter = probe_array->erase(iter);
             } else {
                 ++iter;
+            }
+        }
+        std::list<coal_entry> * coal_array = coal_l2_tag_array[index];
+        for (auto coal_iter = coal_array->begin(); coal_iter != coal_array->end(); ){
+            if (vpn_chunk == coal_entry_chunk(coal_iter->m_tag, coal_iter->m_shift, coal_iter->m_page_size)) {
+                coal_iter = coal_array->erase(coal_iter);
+            } else {
+                ++coal_iter;
             }
         }
     }
