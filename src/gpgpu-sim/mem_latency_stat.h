@@ -41,6 +41,7 @@
 #include "gpu-cache.h"
 
 class memory_config;
+class page_migration_engine;
 class memory_stats_t {
 public:
   const static uint64_t stat_arr_size = 10;
@@ -53,6 +54,9 @@ public:
 
   unsigned m_chiplet = 0;
   void set_chiplet(unsigned chiplet) { m_chiplet = chiplet; }
+
+  page_migration_engine *m_page_migration = nullptr;
+  void set_page_migration(page_migration_engine *engine) { m_page_migration = engine; }
 
   void data_latency_stat(mem_fetch * mf);
   void mcm_cache_stat(cache_request_status access_status, cache_request_status probe_status, bool is_partition, mem_fetch * mf);

@@ -34,6 +34,8 @@ struct inter_flit {
     unsigned m_dst_chip_id = 0;
     mem_fetch *m_mf = nullptr;
     bool m_is_refly = false;
+    bool m_is_migration = false;   // page migration copy traffic (m_mf == nullptr)
+    uint64_t m_migration_id = 0;
     inter_flit() {
         m_src_chip_id = -1;
         m_dst_chip_id = -1;

@@ -99,7 +99,7 @@ unsigned inter_noc::get_num_chip() const {
 
 void inter_noc::push_flit(inter_flit *flit) {
     assert(flit->m_src_chip_id < m_gateway.size());
-    if (!flit->m_is_refly) {
+    if (!flit->m_is_refly && !flit->m_is_migration) {
         assert(flit->m_mf->get_mcm_req_status() == 0);
     }
     m_gateway[flit->m_src_chip_id]->push_back(flit);

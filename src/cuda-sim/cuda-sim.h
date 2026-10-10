@@ -142,6 +142,7 @@ public:
     void update_profiling(uint64_t vpn, unsigned chiplet);
     float get_malloc_remote_ratio(unsigned malloc_num);
     unsigned get_map_chiplet(uint64_t vpn);
+    bool migrate_group(uint64_t base_vpn, unsigned n_pages, unsigned dst_chiplet);  // page migration
     void copy_alloc_result(unsigned & total_result, std::vector<unsigned> & chiplet_result);
 };
 /*****************/

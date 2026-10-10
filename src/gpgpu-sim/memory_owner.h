@@ -207,6 +207,8 @@ public:
     void set_DRAM_channel(dram_t * dram_channel, int channel_id);
     void set_stat(memory_stats_t * stat);
     page * allocate_PA(new_addr_type va_base, new_addr_type pa_base, int appID, unsigned chiplet, unsigned page_mode);
+    // page migration: move the page metadata to the frame at new_pa (PTE structure is unchanged)
+    page * remap_PA(page * old_page, new_addr_type new_pa);
 };
 
 class mmu {
@@ -236,6 +238,7 @@ public:
     void set_L2_tlb(tlb_tag_array * L2TLB);
     tlb_tag_array * get_L2_tlb() { return l2_tlb; }
     bool allocate_PA(new_addr_type va_base, new_addr_type pa_base, int appID, unsigned chiplet, unsigned page_mode);
+    void remap_PA(new_addr_type va_base, new_addr_type new_pa, int appID);  // page migration
 private:
     class gpgpu_sim * m_gpu;
     Hub* m_gpu_alloc;

@@ -346,6 +346,12 @@ void tlb_tag_array::fill_coalescing(new_addr_type addr, unsigned accessor,
 // TLB lookup function for L1 TLBs
 enum tlb_request_status tlb_tag_array::probe(
         new_addr_type addr, unsigned accessor, mem_fetch *mf) {
+    // page group being migrated: retry until the copy completes
+    page_migration_engine *migration = m_gpu->get_page_migration();
+    if (migration && migration->is_frozen(get_key(addr, mf->get_appID()))) {
+        return TLB_MSHR_FAIL;
+    }
+
     if (m_config->enable_profiling) {
         return probe_coalescing(addr, accessor, mf);
     }

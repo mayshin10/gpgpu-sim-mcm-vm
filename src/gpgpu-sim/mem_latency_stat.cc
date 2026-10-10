@@ -1075,6 +1075,10 @@ void memory_stats_t::data_latency_stat(mem_fetch *mf) {
 
 void memory_stats_t::mcm_cache_stat(cache_request_status access_status, cache_request_status probe_status,
                                     bool is_partition, mem_fetch *mf) {
+    // page migration samples L1 misses
+    if (m_page_migration && !is_partition && (access_status == MISS || access_status == SECTOR_MISS)) {
+        m_page_migration->on_access(mf);
+    }
     if (!is_partition && access_status != RESERVATION_FAIL) {
         bool is_local = mf->get_is_local_access();
         if (is_local) tot_local_access++;

@@ -51,6 +51,7 @@
 #include <sstream>
 #include <vector>
 #include "memory_owner.h"
+#include "page_migration.h"
 #include <map>
 
 // constants for statistics printouts
@@ -539,6 +540,8 @@ class memory_config {
   bool enable_profiling;
   float mapping_threshold;
   float selection_threshold;
+
+  page_migration_config m_migration_config;  // CLAP + page migration
   /****************************************************************************/
 
   unsigned dram_bnk_indexing_policy;
@@ -832,6 +835,7 @@ class gpgpu_sim : public gpgpu_t {
   mmu* get_page_manager() { return m_page_manager; }
   tlb_tag_array* get_shared_tlb() { return m_shared_tlb; }
   inter_noc* get_inter_noc() { return m_inter_noc; }
+  page_migration_engine* get_page_migration() { return m_page_migration; }
 
  private:
   // clocks
@@ -854,6 +858,7 @@ class gpgpu_sim : public gpgpu_t {
   mmu * m_page_manager;
   tlb_tag_array * m_shared_tlb;
   inter_noc * m_inter_noc;
+  page_migration_engine * m_page_migration = nullptr;  // only when -enable_page_migration
 
   unsigned m_sm_chiplet_base  = 0;
   unsigned m_sub_chiplet_base = 0;

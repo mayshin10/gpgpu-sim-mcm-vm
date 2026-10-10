@@ -454,6 +454,7 @@ option_parser_register(opp, "-mapping_granularity", OPT_UINT32, &mapping_granula
                        "Threshold for triggering page size selection", "0.30");
   option_parser_register(opp, "-selection_threshold", OPT_FLOAT, &selection_threshold,
                        "Threshold to select proper page size", "1");
+  m_migration_config.reg_options(opp);
 
 
   /********************************************************************************************************************/
@@ -928,6 +929,7 @@ void gpgpu_sim::launch(kernel_info_t *kinfo) {
   unsigned kernelID = kinfo->get_uid();
   unsigned long long streamID = kinfo->get_streamID();
   kernel_time_t kernel_time = {gpu_tot_sim_cycle + gpu_sim_cycle, 0};
+  if (m_page_migration) m_page_migration->on_kernel_launch(kernelID);
   if (gpu_kernel_time.find(streamID) == gpu_kernel_time.end()) {
     std::map<unsigned, kernel_time_t> new_val;
     new_val.insert(std::pair<unsigned, kernel_time_t>(kernelID, kernel_time));
@@ -1145,6 +1147,11 @@ gpgpu_sim::gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx)
   }
 
   m_inter_noc = new inter_noc(m_memory_config, this);
+
+  if (m_memory_config->m_migration_config.enable_page_migration) {
+    m_page_migration = new page_migration_engine(m_memory_config, this, m_gpu_alloc, m_shared_tlb, m_inter_noc);
+    m_memory_stats->set_page_migration(m_page_migration);
+  }
 
   gpu_stall_dramfull = 0;
   gpu_stall_icnt2sh = 0;
@@ -1385,6 +1392,7 @@ void gpgpu_sim::print_stats(unsigned long long streamID) {
   gpgpu_ctx->stats->ptx_file_line_stats_write_file();
   gpu_print_stat(streamID);
   this->m_memory_stats->print_essential(stdout);
+  if (m_page_migration) m_page_migration->print_stats(stdout);
 
   if (g_network_mode) {
     printf(
@@ -2359,7 +2367,10 @@ void gpgpu_sim::cycle() {
         if (get_wrap != nullptr) {
             inter_flit* get_flit = get_wrap->m_flit;
             delete get_wrap;
-            if (get_flit->m_is_refly) {
+            if (get_flit->m_is_migration) {
+                m_page_migration->on_flit_arrival(get_flit->m_migration_id);
+                delete get_flit;
+            } else if (get_flit->m_is_refly) {
                 m_memory_sub_partition[get_flit->m_mf->get_tlx_addr().request_sub_partition]->handle_remote_response(get_flit->m_mf);
                 delete get_flit;
             } else {
@@ -2371,6 +2382,9 @@ void gpgpu_sim::cycle() {
         }
       }
     }
+
+    // page migration: epoch decisions and shootdown completion
+    if (m_page_migration) m_page_migration->cycle(gpu_sim_cycle + gpu_tot_sim_cycle);
   }
   partiton_reqs_in_parallel += partiton_reqs_in_parallel_per_cycle;
   if (partiton_reqs_in_parallel_per_cycle > 0) {
@@ -2860,6 +2874,7 @@ void gpgpu_sim::gpu_print_stat_file(unsigned long long streamID, FILE* outputfil
     fprintf(outputfile, "\n");
 
     this->m_memory_stats->print_essential(outputfile);
+    if (m_page_migration) m_page_migration->print_stats(outputfile);
     fflush(outputfile);
     clear_executed_kernel_info();
 }

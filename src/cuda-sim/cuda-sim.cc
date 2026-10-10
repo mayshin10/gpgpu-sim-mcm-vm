@@ -3741,6 +3741,71 @@ public:
           return status;
       }
     }
+
+    // Page migration: map the n_pages base pages starting at base_vpn to n_pages
+    // contiguous, n_pages-aligned frames of dst_chiplet, so the group can still be
+    // covered by merged TLB entries. Old frames are not reused (stale L2 lines).
+    // frames receives the new frame number of each base page.
+    bool remap_group(uint64_t ID, uint64_t base_vpn, unsigned n_pages, unsigned dst_chiplet,
+                     std::vector<uint64_t> &frames) {
+        assert(huge_page_size == 1);
+        assert(n_pages != 0 && (n_pages & (n_pages - 1)) == 0 && n_pages <= 512);
+        assert(base_vpn % n_pages == 0);
+
+        auto find_data = ID_to_data.find(ID);
+        if (find_data == ID_to_data.end() || find_data->second == nullptr) return false;
+        Vspace_Data* data = find_data->second;
+        for (uint64_t vpn = base_vpn; vpn < base_vpn + n_pages; vpn++) {
+            auto find_chunk = data->virt_to_phys.find(vpn);
+            if (find_chunk == data->virt_to_phys.end() || find_chunk->second == nullptr) return false;
+        }
+
+        take_migration_frames(n_pages, dst_chiplet, frames);
+
+        for (uint64_t i = 0; i < n_pages; i++) {
+            const uint64_t vpn = base_vpn + i;
+            Virtual_Chunk* chunk = data->virt_to_phys.at(vpn);
+            chunk->chunk_num = frames[i];
+
+            // page allocation tracking
+            unsigned src_chiplet = chiplet_page_alloc_map.at(vpn);
+            chiplet_page_alloc[src_chiplet] -= 1;
+            chiplet_page_alloc[dst_chiplet] += 1;
+            chiplet_page_alloc_map[vpn] = dst_chiplet;
+            if (m_mem_config->mcm_data_schedule == PAGE_FIRST_TOUCH) {
+                unsigned malloc_num = hub->get_malloc(vpn << static_cast<uint64_t>(PAGE_OFFSET));
+                malloc_chiplet_page_alloc[malloc_num][src_chiplet] -= 1;
+                malloc_chiplet_page_alloc[malloc_num][dst_chiplet] += 1;
+            }
+        }
+        return true;
+    }
+
+private:
+    // frames for page migration, carved from fresh 2MB chunks, one pool per (group size, chiplet)
+    std::map<std::pair<unsigned, unsigned>, std::deque<uint64_t>> migration_frames;
+
+    void take_migration_frames(unsigned n_pages, unsigned chiplet, std::vector<uint64_t> &frames) {
+        std::deque<uint64_t> &pool = migration_frames[std::make_pair(n_pages, chiplet)];
+        if (pool.size() < n_pages) {
+            assert(!chiplet_free_large_chunks[chiplet].empty() && "Memory Over!! during page migration");
+            uint64_t get_chunk = chiplet_free_large_chunks[chiplet].back();
+            chiplet_free_large_chunks[chiplet].pop_back();
+            for (unsigned i = 0; i < 512; i++) {
+                uint64_t get_sub_page = chiplet_free_chunks[chiplet].back();
+                chiplet_free_chunks[chiplet].pop_back();
+                assert(get_chunk == (uint64_t)(get_sub_page / static_cast<uint64_t>(512)));
+                pool.push_back(get_sub_page);  // ascending frame numbers
+            }
+        }
+        frames.clear();
+        for (unsigned i = 0; i < n_pages; i++) {
+            frames.push_back(pool.front());
+            pool.pop_front();
+        }
+        assert(frames[0] % n_pages == 0);
+        for (unsigned i = 1; i < n_pages; i++) assert(frames[i] == frames[0] + i);
+    }
 };
 
 
@@ -4602,6 +4667,16 @@ float Hub::get_malloc_remote_ratio(unsigned malloc_num) {
     uint64_t remote = m_mmu->get_L2_tlb()->get_mem_stat()->tot_remote_access_malloc[malloc_num];
     if (access == 0) return 0;
     return (static_cast<float>(remote) / static_cast<float>(access));
+}
+
+bool Hub::migrate_group(uint64_t base_vpn, unsigned n_pages, unsigned dst_chiplet) {
+    uint64_t ID = APP_ID;
+    std::vector<uint64_t> frames;
+    if (!pmm->remap_group(ID, base_vpn, n_pages, dst_chiplet, frames)) return false;
+    for (unsigned i = 0; i < n_pages; i++) {
+        m_mmu->remap_PA((new_addr_type)((base_vpn + i) * page_size), (new_addr_type)(frames[i] * page_size), ID);
+    }
+    return true;
 }
 
 unsigned Hub::get_map_chiplet(uint64_t vpn) {

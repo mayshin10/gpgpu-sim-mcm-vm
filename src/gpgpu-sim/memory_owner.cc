@@ -614,6 +614,32 @@ page * DRAM_layout::allocate_PA(new_addr_type va_base, new_addr_type pa_base, in
     return target_page;
 }
 
+// Page migration: the VA now maps to new_pa. Only the first base page of a mapping
+// unit has page metadata (see allocate_PA), so other base pages are skipped.
+// The old frame is not returned to any free list.
+void mmu::remap_PA(new_addr_type va_base, new_addr_type new_pa, int appID) {
+    unsigned searchID = va_base | appID;
+    auto find = va_to_page_mapping->find(searchID);
+    // get_pa() looks pages up with operator[], so base pages without metadata hold nullptr
+    if (find == va_to_page_mapping->end() || find->second == nullptr) return;
+    find->second = m_DRAM->remap_PA(find->second, new_pa);
+}
+
+page * DRAM_layout::remap_PA(page * old_page, new_addr_type new_pa) {
+    page * new_page = find_page_from_pa(new_pa);
+    assert(new_page != nullptr && "Never happen : memory allocation error !!");
+    assert(new_page->appID != PT_SPACE && "Never happen : memory allocation error !!");
+
+    new_page->va_page_addr = old_page->va_page_addr;
+    new_page->appID = old_page->appID;
+    new_page->utilization = old_page->utilization;
+    new_page->dataPresent = old_page->dataPresent;
+    new_page->used = true;
+    new_page->last_accessed_time = m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle;
+    new_page->page_mode = old_page->page_mode;
+    return new_page;
+}
+
 new_addr_type mmu::get_pa(new_addr_type addr, int appID, bool * fault, bool isRead, unsigned chiplet) {
     page * this_page =  nullptr;
     unsigned searchID = ((addr >> m_config->page_size) << m_config->page_size) | appID;
